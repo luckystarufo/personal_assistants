@@ -32,8 +32,14 @@ class EchoForgeAgent:
         workflow.add_node("echo_mode", self._echo_mode)
         
         # Add edges
-        workflow.add_edge("process_turn", "learning_mode", self._is_learning_mode)
-        workflow.add_edge("process_turn", "echo_mode", self._is_echo_mode)
+        workflow.add_conditional_edges(
+            "process_turn",
+            self._route_mode,
+            {
+                "learning": "learning_mode",
+                "echo": "echo_mode"
+            }
+        )
         workflow.add_edge("learning_mode", END)
         workflow.add_edge("echo_mode", END)
         
@@ -100,13 +106,9 @@ class EchoForgeAgent:
         
         return state
     
-    def _is_learning_mode(self, state: EchoForgeState) -> bool:
-        """Check if in learning mode"""
-        return state["learning_mode"]
-    
-    def _is_echo_mode(self, state: EchoForgeState) -> bool:
-        """Check if in echo mode"""
-        return not state["learning_mode"]
+    def _route_mode(self, state: EchoForgeState) -> str:
+        """Route to appropriate mode"""
+        return "learning" if state["learning_mode"] else "echo"
     
     def chat(self, user_input: str, learning_mode: bool = False) -> str:
         """Main chat interface"""
