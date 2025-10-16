@@ -1,10 +1,6 @@
 """
 EchoForge Demo Script
 """
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from src.agents.echoForge.agent import EchoForgeAgent
 
 
@@ -14,16 +10,7 @@ def main():
     
     # Initialize agent
     agent = EchoForgeAgent()
-    
-    # Demo learning mode
-    print("\n--- Learning Mode Demo ---")
-    response = agent.chat("Hello!", learning_mode=True)
-    print(f"Agent: {response}")
-    
-    # Demo echo mode
-    print("\n--- Echo Mode Demo ---")
-    response = agent.chat("What do you think about AI?", learning_mode=False)
-    print(f"Agent: {response}")
+    agent.chat()
     
     print("\n=== Demo Complete ===")
 

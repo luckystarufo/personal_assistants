@@ -18,125 +18,59 @@ class EchoForgeAgent:
         self.memory = EchoForgeMemory(self.config.data_dir)
         self.learning_prompts = LearningPrompts()
         self.echo_prompts = EchoPrompts()
-        self.graph = self._build_graph()
+        self.graph = self._build_learning_graph() if self.config.learning_mode else self._build_echo_graph()
     
-    def _build_graph(self) -> StateGraph:
-        """Build LangGraph workflow"""
-        print("[AGENT] Building LangGraph workflow...")
-        
+    def _build_learning_graph(self) -> StateGraph:
+        """Build LangGraph workflow for learning mode"""
+        print("[AGENT] Building learning graph...")
         workflow = StateGraph(EchoForgeState)
         
-        # Add nodes
-        workflow.add_node("process_turn", self._process_turn)
-        workflow.add_node("learning_mode", self._learning_mode)
-        workflow.add_node("echo_mode", self._echo_mode)
-        
-        # Add edges
-        workflow.add_conditional_edges(
-            "process_turn",
-            self._route_mode,
-            {
-                "learning": "learning_mode",
-                "echo": "echo_mode"
-            }
-        )
-        workflow.add_edge("learning_mode", END)
-        workflow.add_edge("echo_mode", END)
-        
-        workflow.set_entry_point("process_turn")
+        # Add dummy node for testing
+        workflow.add_node("dummy_learning_node", self._dummy_learning_node)
+        workflow.add_edge("dummy_learning_node", END)
+        workflow.set_entry_point("dummy_learning_node")
         
         return workflow.compile()
     
-    def _process_turn(self, state: EchoForgeState) -> EchoForgeState:
-        """Process user input and determine mode"""
-        print(f"[AGENT] Processing turn in {'Learning' if state['learning_mode'] else 'Echo'} mode")
+    def _build_echo_graph(self) -> StateGraph:
+        """Build LangGraph workflow for echo mode"""
+        print("[AGENT] Building echo graph...")
+        workflow = StateGraph(EchoForgeState)
+        
+        # Add dummy node for testing
+        workflow.add_node("dummy_echo_node", self._dummy_echo_node)
+        workflow.add_edge("dummy_echo_node", END)
+        workflow.set_entry_point("dummy_echo_node")
+        
+        return workflow.compile()
+    
+    def _dummy_learning_node(self, state: EchoForgeState) -> EchoForgeState:
+        """Dummy learning node for testing"""
+        print("[AGENT] Executing dummy learning node...")
+        state["messages"] = [{"role": "assistant", "content": "Hello! I'm in learning mode. Ready to learn about you!"}]
         return state
     
-    def _learning_mode(self, state: EchoForgeState) -> EchoForgeState:
-        """Handle learning mode interactions"""
-        print("[AGENT] Executing learning mode...")
-        
-        # Generate learning question
-        question = self.learning_prompts.generate_learning_question(
-            state["user_profile"], 
-            state["conversation_history"]
-        )
-        
-        # Store interaction
-        self.memory.store_learning_conversation(question, state["user_input"])
-        
-        # Update state
-        state["response"] = question
-        state["current_question"] = question
-        
+    def _dummy_echo_node(self, state: EchoForgeState) -> EchoForgeState:
+        """Dummy echo node for testing"""
+        print("[AGENT] Executing dummy echo node...")
+        state["messages"] = [{"role": "assistant", "content": "Hello! I'm in echo mode. Ready to respond as you!"}]
         return state
     
-    def _echo_mode(self, state: EchoForgeState) -> EchoForgeState:
-        """Handle echo mode interactions"""
-        print("[AGENT] Executing echo mode...")
+    def chat(self) -> str:
+        """Main chat interface - agent initiates conversation"""
+        print(f"[AGENT] Starting chat - Mode: {'Learning' if self.config.learning_mode else 'Echo'}")
         
-        # Get relevant context
-        context = self.memory.get_relevant_context(state["user_input"])
-        
-        # Generate echo response
-        response = self.echo_prompts.generate_echo_response(
-            state["user_input"],
-            state["user_profile"],
-            context
-        )
-        
-        # Calculate confidence
-        confidence = self.echo_prompts.calculate_confidence(
-            state["user_input"],
-            response,
-            state["user_profile"]
-        )
-        
-        # Store interaction
-        self.memory.store_echo_conversation(
-            state["user_input"],
-            response,
-            confidence
-        )
-        
-        # Update state
-        state["response"] = response
-        state["confidence_score"] = confidence
-        state["confirmation_needed"] = confidence < self.config.confidence_threshold
-        
-        return state
-    
-    def _route_mode(self, state: EchoForgeState) -> str:
-        """Route to appropriate mode"""
-        return "learning" if state["learning_mode"] else "echo"
-    
-    def chat(self, user_input: str, learning_mode: bool = False) -> str:
-        """Main chat interface"""
-        print(f"[AGENT] Starting chat - Mode: {'Learning' if learning_mode else 'Echo'}")
-        
-        # Load user profile
-        user_profile = self.memory.load_user_profile()
-        
-        # Create initial state
+        # Create initial state with empty messages
         initial_state: EchoForgeState = {
-            "learning_mode": learning_mode,
-            "user_input": user_input,
-            "response": "",
-            "user_profile": user_profile,
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.0,
-            "confirmation_needed": False,
-            "timestamp": "",
-            "session_id": ""
+            "messages": []
         }
         
         # Run graph
         result = self.graph.invoke(initial_state)
         
-        # Save updated profile
-        self.memory.save_user_profile(result["user_profile"])
-        
-        return result["response"]
+        # Return the last message content
+        if result["messages"]:
+            return result["messages"][-1]["content"]
+        else:
+            return "No response generated"
+    

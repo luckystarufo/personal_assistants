@@ -2,371 +2,166 @@
 Unit tests for EchoForgeState
 """
 import pytest
-from typing import Dict, Any, List
+from typing import Dict, List
 from src.agents.echoForge.state import EchoForgeState
 
 
 class TestEchoForgeState:
     """Test cases for EchoForgeState TypedDict"""
     
-    def test_state_creation_with_all_fields(self):
-        """Test creating state with all required fields"""
+    def test_state_creation_with_messages(self):
+        """Test creating state with messages"""
         state: EchoForgeState = {
-            "learning_mode": True,
-            "user_input": "Hello, how are you?",
-            "response": "I'm doing well, thank you!",
-            "user_profile": {
-                "personality_traits": {"analytical": 0.8},
-                "interests": ["AI", "programming"],
-                "communication_style": {"formal": True},
-                "expertise_areas": ["Python", "ML"]
-            },
-            "conversation_history": [
-                {"role": "user", "content": "Hi"},
-                {"role": "assistant", "content": "Hello!"}
-            ],
-            "session_context": {"current_topic": "AI"},
-            "learning_targets": ["hobbies", "goals"],
-            "current_question": "What are your hobbies?",
-            "confidence_score": 0.85,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "session_123"
+            "messages": [
+                {"role": "user", "content": "Hello, how are you?"},
+                {"role": "assistant", "content": "I'm doing well, thank you!"}
+            ]
         }
         
-        # Verify all fields are accessible
-        assert state["learning_mode"] == True
-        assert state["user_input"] == "Hello, how are you?"
-        assert state["response"] == "I'm doing well, thank you!"
-        assert isinstance(state["user_profile"], dict)
-        assert isinstance(state["conversation_history"], list)
-        assert isinstance(state["session_context"], dict)
-        assert isinstance(state["learning_targets"], list)
-        assert state["current_question"] == "What are your hobbies?"
-        assert state["confidence_score"] == 0.85
-        assert state["confirmation_needed"] == False
-        assert state["timestamp"] == "2024-01-01T12:00:00"
-        assert state["session_id"] == "session_123"
+        # Verify messages field is accessible
+        assert len(state["messages"]) == 2
+        assert state["messages"][0]["role"] == "user"
+        assert state["messages"][0]["content"] == "Hello, how are you?"
+        assert state["messages"][1]["role"] == "assistant"
+        assert state["messages"][1]["content"] == "I'm doing well, thank you!"
     
-    def test_state_creation_learning_mode(self):
-        """Test creating state for learning mode"""
+    def test_state_creation_empty_messages(self):
+        """Test creating state with empty messages"""
         state: EchoForgeState = {
-            "learning_mode": True,
-            "user_input": "Tell me about yourself",
-            "response": "",
-            "user_profile": {},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": ["personality", "interests"],
-            "current_question": "What are your main interests?",
-            "confidence_score": 0.0,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "session_456"
+            "messages": []
         }
         
-        assert state["learning_mode"] == True
-        assert state["current_question"] == "What are your main interests?"
-        assert state["learning_targets"] == ["personality", "interests"]
-        assert state["confidence_score"] == 0.0
-        assert state["confirmation_needed"] == False
+        assert isinstance(state["messages"], list)
+        assert len(state["messages"]) == 0
     
-    def test_state_creation_echo_mode(self):
-        """Test creating state for echo mode"""
+    def test_state_with_single_message(self):
+        """Test creating state with single message"""
         state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "What do you think about AI?",
-            "response": "AI has great potential for solving complex problems",
-            "user_profile": {
-                "personality_traits": {"analytical": 0.9},
-                "interests": ["technology"],
-                "communication_style": {"technical": True},
-                "expertise_areas": ["AI", "Machine Learning"]
-            },
-            "conversation_history": [
-                {"role": "user", "content": "Tell me about AI"},
-                {"role": "assistant", "content": "AI is fascinating"}
-            ],
-            "session_context": {"topic": "AI discussion"},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.92,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "session_789"
+            "messages": [
+                {"role": "assistant", "content": "Hello! I'm EchoForge."}
+            ]
         }
         
-        assert state["learning_mode"] == False
-        assert state["current_question"] is None
-        assert state["learning_targets"] == []
-        assert state["confidence_score"] == 0.92
-        assert state["response"] == "AI has great potential for solving complex problems"
+        assert len(state["messages"]) == 1
+        assert state["messages"][0]["role"] == "assistant"
+        assert state["messages"][0]["content"] == "Hello! I'm EchoForge."
     
-    def test_state_with_minimal_data(self):
-        """Test creating state with minimal required data"""
+    def test_state_with_multiple_turns(self):
+        """Test creating state with multiple conversation turns"""
         state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "",
-            "response": "",
-            "user_profile": {},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.0,
-            "confirmation_needed": False,
-            "timestamp": "",
-            "session_id": ""
+            "messages": [
+                {"role": "assistant", "content": "Hello! I'm EchoForge in learning mode."},
+                {"role": "user", "content": "Hi! Tell me about yourself."},
+                {"role": "assistant", "content": "I'm an AI agent designed to learn about you."},
+                {"role": "user", "content": "What do you want to know?"},
+                {"role": "assistant", "content": "What are your main interests?"}
+            ]
         }
         
-        # All fields should be accessible with default values
-        assert state["learning_mode"] == False
-        assert state["user_input"] == ""
-        assert state["response"] == ""
-        assert state["user_profile"] == {}
-        assert state["conversation_history"] == []
-        assert state["session_context"] == {}
-        assert state["learning_targets"] == []
-        assert state["current_question"] is None
-        assert state["confidence_score"] == 0.0
-        assert state["confirmation_needed"] == False
-        assert state["timestamp"] == ""
-        assert state["session_id"] == ""
+        assert len(state["messages"]) == 5
+        assert state["messages"][0]["role"] == "assistant"
+        assert state["messages"][1]["role"] == "user"
+        assert state["messages"][2]["role"] == "assistant"
+        assert state["messages"][3]["role"] == "user"
+        assert state["messages"][4]["role"] == "assistant"
     
     def test_state_field_types(self):
         """Test that state fields have correct types"""
         state: EchoForgeState = {
-            "learning_mode": True,
-            "user_input": "test",
-            "response": "test",
-            "user_profile": {"key": "value"},
-            "conversation_history": [{"role": "user", "content": "test"}],
-            "session_context": {"key": "value"},
-            "learning_targets": ["target1"],
-            "current_question": "question",
-            "confidence_score": 0.5,
-            "confirmation_needed": True,
-            "timestamp": "2024-01-01T00:00:00",
-            "session_id": "id123"
+            "messages": [
+                {"role": "user", "content": "test message"},
+                {"role": "assistant", "content": "test response"}
+            ]
         }
         
         # Test type checking
-        assert isinstance(state["learning_mode"], bool)
-        assert isinstance(state["user_input"], str)
-        assert isinstance(state["response"], str)
-        assert isinstance(state["user_profile"], dict)
-        assert isinstance(state["conversation_history"], list)
-        assert isinstance(state["session_context"], dict)
-        assert isinstance(state["learning_targets"], list)
-        assert isinstance(state["current_question"], str) or state["current_question"] is None
-        assert isinstance(state["confidence_score"], float)
-        assert isinstance(state["confirmation_needed"], bool)
-        assert isinstance(state["timestamp"], str)
-        assert isinstance(state["session_id"], str)
+        assert isinstance(state["messages"], list)
+        assert isinstance(state["messages"][0], dict)
+        assert isinstance(state["messages"][0]["role"], str)
+        assert isinstance(state["messages"][0]["content"], str)
+        assert isinstance(state["messages"][1]["role"], str)
+        assert isinstance(state["messages"][1]["content"], str)
     
-    def test_state_with_complex_user_profile(self):
-        """Test state with complex user profile data"""
-        complex_profile = {
-            "personality_traits": {
-                "analytical": 0.9,
-                "creative": 0.7,
-                "social": 0.3,
-                "methodical": 0.8
-            },
-            "interests": [
-                "artificial intelligence",
-                "machine learning",
-                "data science",
-                "programming",
-                "philosophy"
-            ],
-            "communication_style": {
-                "formal": True,
-                "technical": True,
-                "detailed": True,
-                "humor": False,
-                "casual": False
-            },
-            "expertise_areas": [
-                "Python",
-                "TensorFlow",
-                "PyTorch",
-                "Natural Language Processing",
-                "Computer Vision"
-            ],
-            "decision_patterns": {
-                "data_driven": True,
-                "risk_averse": False,
-                "collaborative": True,
-                "systematic": True
-            },
-            "preferences": {
-                "learning_style": "hands-on",
-                "communication_preference": "written",
-                "meeting_style": "structured"
-            }
-        }
-        
+    def test_state_with_different_roles(self):
+        """Test state with different message roles"""
         state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "Complex prompt",
-            "response": "Complex response",
-            "user_profile": complex_profile,
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.95,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "complex_session"
+            "messages": [
+                {"role": "system", "content": "System initialization"},
+                {"role": "assistant", "content": "Assistant greeting"},
+                {"role": "user", "content": "User input"},
+                {"role": "assistant", "content": "Assistant response"}
+            ]
         }
         
-        assert state["user_profile"] == complex_profile
-        assert len(state["user_profile"]["personality_traits"]) == 4
-        assert len(state["user_profile"]["interests"]) == 5
-        assert len(state["user_profile"]["expertise_areas"]) == 5
-    
-    def test_state_with_rich_conversation_history(self):
-        """Test state with rich conversation history"""
-        rich_history = [
-            {"role": "user", "content": "Hello, I'm interested in AI"},
-            {"role": "assistant", "content": "That's great! What aspect of AI interests you most?"},
-            {"role": "user", "content": "I'm particularly interested in machine learning"},
-            {"role": "assistant", "content": "Machine learning is fascinating. Do you have experience with any ML frameworks?"},
-            {"role": "user", "content": "I've worked with TensorFlow and PyTorch"},
-            {"role": "assistant", "content": "Excellent! Those are both powerful frameworks. What kind of projects have you built?"}
-        ]
-        
-        state: EchoForgeState = {
-            "learning_mode": True,
-            "user_input": "Tell me more about your projects",
-            "response": "",
-            "user_profile": {},
-            "conversation_history": rich_history,
-            "session_context": {"topic": "AI discussion", "depth": "technical"},
-            "learning_targets": ["project_experience", "technical_skills"],
-            "current_question": "What specific projects have you worked on?",
-            "confidence_score": 0.0,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "rich_session"
-        }
-        
-        assert len(state["conversation_history"]) == 6
-        assert state["conversation_history"][0]["role"] == "user"
-        assert state["conversation_history"][0]["content"] == "Hello, I'm interested in AI"
-        assert state["session_context"]["topic"] == "AI discussion"
-    
-    def test_state_confidence_scenarios(self):
-        """Test state with different confidence scenarios"""
-        # High confidence scenario
-        high_confidence_state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "What's 2+2?",
-            "response": "2+2 equals 4",
-            "user_profile": {"expertise_areas": ["mathematics"]},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.99,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "high_conf"
-        }
-        
-        assert high_confidence_state["confidence_score"] == 0.99
-        assert high_confidence_state["confirmation_needed"] == False
-        
-        # Low confidence scenario
-        low_confidence_state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "What's your opinion on quantum physics?",
-            "response": "I think quantum physics is...",
-            "user_profile": {"expertise_areas": ["programming"]},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.25,
-            "confirmation_needed": True,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "low_conf"
-        }
-        
-        assert low_confidence_state["confidence_score"] == 0.25
-        assert low_confidence_state["confirmation_needed"] == True
-    
-    def test_state_learning_targets_scenarios(self):
-        """Test state with different learning target scenarios"""
-        # Learning mode with targets
-        learning_state: EchoForgeState = {
-            "learning_mode": True,
-            "user_input": "I want to learn more about you",
-            "response": "",
-            "user_profile": {},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": ["personality", "hobbies", "goals", "values"],
-            "current_question": "What are your core values?",
-            "confidence_score": 0.0,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "learning_session"
-        }
-        
-        assert learning_state["learning_mode"] == True
-        assert len(learning_state["learning_targets"]) == 4
-        assert "personality" in learning_state["learning_targets"]
-        assert learning_state["current_question"] == "What are your core values?"
-        
-        # Echo mode with no targets
-        echo_state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "Respond to this prompt",
-            "response": "Here's my response",
-            "user_profile": {},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.8,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "echo_session"
-        }
-        
-        assert echo_state["learning_mode"] == False
-        assert echo_state["learning_targets"] == []
-        assert echo_state["current_question"] is None
+        roles = [msg["role"] for msg in state["messages"]]
+        assert "system" in roles
+        assert "assistant" in roles
+        assert "user" in roles
+        assert len(roles) == 4
     
     def test_state_mutation(self):
         """Test that state can be mutated (TypedDict allows this)"""
         state: EchoForgeState = {
-            "learning_mode": False,
-            "user_input": "Initial input",
-            "response": "Initial response",
-            "user_profile": {},
-            "conversation_history": [],
-            "session_context": {},
-            "learning_targets": [],
-            "current_question": None,
-            "confidence_score": 0.5,
-            "confirmation_needed": False,
-            "timestamp": "2024-01-01T12:00:00",
-            "session_id": "mutable_session"
+            "messages": []
         }
         
-        # Mutate state
-        state["learning_mode"] = True
-        state["user_input"] = "Updated input"
-        state["response"] = "Updated response"
-        state["confidence_score"] = 0.9
-        state["confirmation_needed"] = True
+        # Add messages
+        state["messages"].append({"role": "assistant", "content": "Hello!"})
+        state["messages"].append({"role": "user", "content": "Hi there!"})
         
-        assert state["learning_mode"] == True
-        assert state["user_input"] == "Updated input"
-        assert state["response"] == "Updated response"
-        assert state["confidence_score"] == 0.9
-        assert state["confirmation_needed"] == True
+        assert len(state["messages"]) == 2
+        assert state["messages"][0]["content"] == "Hello!"
+        assert state["messages"][1]["content"] == "Hi there!"
+        
+        # Modify existing message
+        state["messages"][0]["content"] = "Hello, how can I help you?"
+        assert state["messages"][0]["content"] == "Hello, how can I help you?"
+    
+    def test_state_with_long_content(self):
+        """Test state with long message content"""
+        long_content = "This is a very long message that contains multiple sentences. " * 10
+        
+        state: EchoForgeState = {
+            "messages": [
+                {"role": "user", "content": long_content},
+                {"role": "assistant", "content": "I received your long message."}
+            ]
+        }
+        
+        assert len(state["messages"]) == 2
+        assert len(state["messages"][0]["content"]) > 100
+        assert state["messages"][1]["content"] == "I received your long message."
+    
+    def test_state_with_special_characters(self):
+        """Test state with special characters in content"""
+        state: EchoForgeState = {
+            "messages": [
+                {"role": "user", "content": "Hello! How are you? I'm doing great! 😊"},
+                {"role": "assistant", "content": "I'm doing well too! Thanks for asking! 🎉"},
+                {"role": "user", "content": "What about emojis: 🚀🌟💡🎯"},
+                {"role": "assistant", "content": "Emojis are fun! 🎨✨"}
+            ]
+        }
+        
+        assert len(state["messages"]) == 4
+        assert "😊" in state["messages"][0]["content"]
+        assert "🎉" in state["messages"][1]["content"]
+        assert "🚀" in state["messages"][2]["content"]
+        assert "🎨" in state["messages"][3]["content"]
+    
+    def test_state_with_empty_content(self):
+        """Test state with empty content messages"""
+        state: EchoForgeState = {
+            "messages": [
+                {"role": "user", "content": ""},
+                {"role": "assistant", "content": "I see you sent an empty message."},
+                {"role": "user", "content": "   "},  # Whitespace only
+                {"role": "assistant", "content": "You sent whitespace."}
+            ]
+        }
+        
+        assert len(state["messages"]) == 4
+        assert state["messages"][0]["content"] == ""
+        assert state["messages"][1]["content"] == "I see you sent an empty message."
+        assert state["messages"][2]["content"] == "   "
+        assert state["messages"][3]["content"] == "You sent whitespace."
