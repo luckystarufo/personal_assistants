@@ -15,7 +15,7 @@ class TestEchoForgeConfig:
         """Test default configuration values"""
         config = EchoForgeConfig()
         
-        assert config.learning_mode == False
+        assert config.mode == "interview"
         assert config.llm_model == "gpt-4"
         assert config.llm_temperature == 0.7
         assert config.max_conversation_history == 10
@@ -28,7 +28,7 @@ class TestEchoForgeConfig:
         """Test loading config from existing file"""
         # Create temporary config file
         config_data = {
-            "learning_mode": True,
+            "mode": "instruct",
             "llm_model": "gpt-3.5-turbo",
             "llm_temperature": 0.5,
             "max_conversation_history": 20,
@@ -45,7 +45,7 @@ class TestEchoForgeConfig:
         try:
             config = EchoForgeConfig.from_file(temp_path)
             
-            assert config.learning_mode == True
+            assert config.mode == "instruct"
             assert config.llm_model == "gpt-3.5-turbo"
             assert config.llm_temperature == 0.5
             assert config.max_conversation_history == 20
@@ -61,14 +61,14 @@ class TestEchoForgeConfig:
         config = EchoForgeConfig.from_file("non_existent_config.yaml")
         
         # Should return default values
-        assert config.learning_mode == False
+        assert config.mode == "interview"
         assert config.llm_model == "gpt-4"
         assert config.llm_temperature == 0.7
     
     def test_save_to_file(self):
         """Test saving config to file"""
         config = EchoForgeConfig()
-        config.learning_mode = True
+        config.mode = "echo"
         config.llm_model = "gpt-3.5-turbo"
         
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -82,7 +82,7 @@ class TestEchoForgeConfig:
             with open(config_path, 'r') as f:
                 saved_data = yaml.safe_load(f)
             
-            assert saved_data["learning_mode"] == True
+            assert saved_data["mode"] == "echo"
             assert saved_data["llm_model"] == "gpt-3.5-turbo"
             assert saved_data["llm_temperature"] == 0.7
     
@@ -104,7 +104,7 @@ class TestEchoForgeConfig:
     def test_config_roundtrip(self):
         """Test saving and loading config maintains all values"""
         original_config = EchoForgeConfig()
-        original_config.learning_mode = True
+        original_config.mode = "instruct"
         original_config.llm_model = "custom-model"
         original_config.llm_temperature = 0.9
         original_config.max_conversation_history = 15
@@ -123,7 +123,7 @@ class TestEchoForgeConfig:
             loaded_config = EchoForgeConfig.from_file(config_path)
             
             # Verify all values match
-            assert loaded_config.learning_mode == original_config.learning_mode
+            assert loaded_config.mode == original_config.mode
             assert loaded_config.llm_model == original_config.llm_model
             assert loaded_config.llm_temperature == original_config.llm_temperature
             assert loaded_config.max_conversation_history == original_config.max_conversation_history

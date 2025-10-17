@@ -1,15 +1,15 @@
 """
-Unit tests for LearningPrompts
+Unit tests for InterviewPrompts
 """
 import pytest
-from src.prompts.echoForge.learning_prompts import LearningPrompts
+from src.prompts.echoForge.interview_prompts import InterviewPrompts
 
 
-class TestLearningPrompts:
-    """Test cases for LearningPrompts class"""
+class TestInterviewPrompts:
+    """Test cases for InterviewPrompts class"""
     
-    def test_generate_learning_question_basic(self):
-        """Test generating a basic learning question"""
+    def test_generate_interview_question_basic(self):
+        """Test generating a basic interview question"""
         profile = {
             "personality_traits": {"analytical": 0.8},
             "interests": ["AI", "programming"],
@@ -20,7 +20,7 @@ class TestLearningPrompts:
             {"role": "assistant", "content": "What programming languages do you prefer?"}
         ]
         
-        question = LearningPrompts.generate_learning_question(profile, conversation_history)
+        question = InterviewPrompts.generate_interview_question(profile, conversation_history)
         
         # Should return a string
         assert isinstance(question, str)
@@ -28,8 +28,8 @@ class TestLearningPrompts:
         # Should be a question (placeholder implementation)
         assert "passionate" in question.lower()
     
-    def test_generate_learning_question_empty_profile(self):
-        """Test generating learning question with empty profile"""
+    def test_generate_interview_question_empty_profile(self):
+        """Test generating interview question with empty profile"""
         profile = {
             "personality_traits": {},
             "interests": [],
@@ -37,13 +37,13 @@ class TestLearningPrompts:
         }
         conversation_history = []
         
-        question = LearningPrompts.generate_learning_question(profile, conversation_history)
+        question = InterviewPrompts.generate_interview_question(profile, conversation_history)
         
         assert isinstance(question, str)
         assert len(question) > 0
     
-    def test_generate_learning_question_with_history(self):
-        """Test generating learning question with conversation history"""
+    def test_generate_interview_question_with_history(self):
+        """Test generating interview question with conversation history"""
         profile = {
             "personality_traits": {"creative": 0.7},
             "interests": ["music"],
@@ -55,7 +55,7 @@ class TestLearningPrompts:
             {"role": "user", "content": "Rock and jazz"}
         ]
         
-        question = LearningPrompts.generate_learning_question(profile, conversation_history)
+        question = InterviewPrompts.generate_interview_question(profile, conversation_history)
         
         assert isinstance(question, str)
         assert len(question) > 0
@@ -65,7 +65,7 @@ class TestLearningPrompts:
         question = "What are your hobbies?"
         answer = "I enjoy programming, reading science fiction, and hiking on weekends"
         
-        summary = LearningPrompts.summarize_qa_interaction(question, answer)
+        summary = InterviewPrompts.summarize_qa_interaction(question, answer)
         
         # Should return a dictionary with expected keys
         assert isinstance(summary, dict)
@@ -88,7 +88,7 @@ class TestLearningPrompts:
         question = "What do you think about AI?"
         answer = ""
         
-        summary = LearningPrompts.summarize_qa_interaction(question, answer)
+        summary = InterviewPrompts.summarize_qa_interaction(question, answer)
         
         assert isinstance(summary, dict)
         assert "insights" in summary
@@ -100,7 +100,7 @@ class TestLearningPrompts:
         original_response = "I think AI will revolutionize healthcare"
         user_feedback = "That's not quite how I would put it"
         
-        confirmation_question = LearningPrompts.generate_confirmation_question(
+        confirmation_question = InterviewPrompts.generate_confirmation_question(
             original_response, user_feedback
         )
         
@@ -116,7 +116,7 @@ class TestLearningPrompts:
         original_response = "Python is the best programming language"
         user_feedback = ""
         
-        confirmation_question = LearningPrompts.generate_confirmation_question(
+        confirmation_question = InterviewPrompts.generate_confirmation_question(
             original_response, user_feedback
         )
         
@@ -132,7 +132,7 @@ class TestLearningPrompts:
             {"role": "user", "content": "I prefer direct communication"}
         ]
         
-        traits = LearningPrompts.extract_personality_traits(conversations)
+        traits = InterviewPrompts.extract_personality_traits(conversations)
         
         assert isinstance(traits, list)
         assert len(traits) > 0
@@ -145,7 +145,7 @@ class TestLearningPrompts:
         """Test extracting traits from empty conversation list"""
         conversations = []
         
-        traits = LearningPrompts.extract_personality_traits(conversations)
+        traits = InterviewPrompts.extract_personality_traits(conversations)
         
         assert isinstance(traits, list)
         # Should still return some default traits
@@ -157,7 +157,7 @@ class TestLearningPrompts:
             {"role": "user", "content": "I'm very methodical in my approach"}
         ]
         
-        traits = LearningPrompts.extract_personality_traits(conversations)
+        traits = InterviewPrompts.extract_personality_traits(conversations)
         
         assert isinstance(traits, list)
         assert len(traits) > 0
@@ -168,14 +168,14 @@ class TestLearningPrompts:
         conversations = [{"role": "user", "content": "test"}]
         
         # Test all methods return expected types
-        question = LearningPrompts.generate_learning_question(profile, conversations)
+        question = InterviewPrompts.generate_interview_question(profile, conversations)
         assert isinstance(question, str)
         
-        summary = LearningPrompts.summarize_qa_interaction("Q", "A")
+        summary = InterviewPrompts.summarize_qa_interaction("Q", "A")
         assert isinstance(summary, dict)
         
-        confirmation = LearningPrompts.generate_confirmation_question("R", "F")
+        confirmation = InterviewPrompts.generate_confirmation_question("R", "F")
         assert isinstance(confirmation, str)
         
-        traits = LearningPrompts.extract_personality_traits(conversations)
+        traits = InterviewPrompts.extract_personality_traits(conversations)
         assert isinstance(traits, list)

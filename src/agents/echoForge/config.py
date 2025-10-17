@@ -10,7 +10,7 @@ import os
 @dataclass
 class EchoForgeConfig:
     """Configuration for EchoForge agent"""
-    learning_mode: bool = False
+    mode: str = "interview"  # "interview", "instruct", "echo"
     llm_model: str = "gpt-4"
     llm_temperature: float = 0.7
     max_conversation_history: int = 10
