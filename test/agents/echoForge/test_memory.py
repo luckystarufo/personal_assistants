@@ -6,31 +6,50 @@ import tempfile
 import os
 import json
 from datetime import datetime
+from unittest.mock import patch, MagicMock
 from src.agents.echoForge.memory import EchoForgeMemory
 
 
 class TestEchoForgeMemory:
     """Test cases for EchoForgeMemory class"""
     
-    def test_init_with_custom_data_dir(self):
+    @patch('src.agents.echoForge.memory.FAISS')
+    @patch('src.agents.echoForge.memory.OpenAIEmbeddings')
+    def test_init_with_custom_data_dir(self, mock_embeddings, mock_faiss):
         """Test initialization with custom data directory"""
+        # Mock the OpenAI dependencies
+        mock_embeddings.return_value = MagicMock()
+        mock_faiss.from_documents.return_value = MagicMock()
+        
         with tempfile.TemporaryDirectory() as temp_dir:
             memory = EchoForgeMemory(temp_dir)
             
             assert memory.data_dir == temp_dir
-            assert memory.profile_file == os.path.join(temp_dir, "user_profile.json")
-            assert memory.conversations_file == os.path.join(temp_dir, "conversations.json")
+            assert memory.user_profile_file == os.path.join(temp_dir, "shared", "user_profile.json")
+            assert memory.historical_posts_file == os.path.join(temp_dir, "echoForge", "historical_posts.json")
     
-    def test_init_with_default_data_dir(self):
+    @patch('src.agents.echoForge.memory.FAISS')
+    @patch('src.agents.echoForge.memory.OpenAIEmbeddings')
+    def test_init_with_default_data_dir(self, mock_embeddings, mock_faiss):
         """Test initialization with default data directory"""
+        # Mock the OpenAI dependencies
+        mock_embeddings.return_value = MagicMock()
+        mock_faiss.from_documents.return_value = MagicMock()
+        
         memory = EchoForgeMemory()
         
-        assert memory.data_dir == "data/echoForge"
-        assert memory.profile_file == "data/echoForge/user_profile.json"
-        assert memory.conversations_file == "data/echoForge/conversations.json"
+        assert memory.data_dir == "data"
+        assert memory.user_profile_file == "data/shared/user_profile.json"
+        assert memory.historical_posts_file == "data/echoForge/historical_posts.json"
     
-    def test_load_user_profile_file_exists(self):
+    @patch('src.agents.echoForge.memory.FAISS')
+    @patch('src.agents.echoForge.memory.OpenAIEmbeddings')
+    def test_load_user_profile_file_exists(self, mock_embeddings, mock_faiss):
         """Test loading user profile from existing file"""
+        # Mock the OpenAI dependencies
+        mock_embeddings.return_value = MagicMock()
+        mock_faiss.from_documents.return_value = MagicMock()
+        
         test_profile = {
             "personality_traits": {"analytical": 0.8, "creative": 0.6},
             "interests": ["AI", "programming"],
@@ -42,24 +61,35 @@ class TestEchoForgeMemory:
         }
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            memory = EchoForgeMemory(temp_dir)
+            # Create shared directory
+            shared_dir = os.path.join(temp_dir, "shared")
+            os.makedirs(shared_dir, exist_ok=True)
             
-            # Create profile file
-            with open(memory.profile_file, 'w') as f:
+            # Create profile file BEFORE initializing memory
+            profile_file = os.path.join(shared_dir, "user_profile.json")
+            with open(profile_file, 'w') as f:
                 json.dump(test_profile, f)
             
+            memory = EchoForgeMemory(temp_dir)
+            
             # Load profile
-            loaded_profile = memory.load_user_profile()
+            loaded_profile = memory.get_user_profile()
             
             assert loaded_profile == test_profile
     
-    def test_load_user_profile_file_not_exists(self):
+    @patch('src.agents.echoForge.memory.FAISS')
+    @patch('src.agents.echoForge.memory.OpenAIEmbeddings')
+    def test_load_user_profile_file_not_exists(self, mock_embeddings, mock_faiss):
         """Test loading user profile when file doesn't exist"""
+        # Mock the OpenAI dependencies
+        mock_embeddings.return_value = MagicMock()
+        mock_faiss.from_documents.return_value = MagicMock()
+        
         with tempfile.TemporaryDirectory() as temp_dir:
             memory = EchoForgeMemory(temp_dir)
             
             # Load profile (should create new one)
-            profile = memory.load_user_profile()
+            profile = memory.get_user_profile()
             
             # Check default structure
             assert "personality_traits" in profile
@@ -77,87 +107,51 @@ class TestEchoForgeMemory:
             assert profile["expertise_areas"] == []
             assert profile["decision_patterns"] == {}
     
-    def test_save_user_profile(self):
-        """Test saving user profile to file"""
-        test_profile = {
-            "personality_traits": {"analytical": 0.8},
-            "interests": ["AI"],
-            "communication_style": {"formal": True},
-            "expertise_areas": ["Python"],
-            "decision_patterns": {"methodical": True},
-            "created_at": "2024-01-01T00:00:00",
-            "last_updated": "2024-01-01T00:00:00"
-        }
+    @patch('src.agents.echoForge.memory.FAISS')
+    @patch('src.agents.echoForge.memory.OpenAIEmbeddings')
+    def test_get_relevant_context(self, mock_embeddings, mock_faiss):
+        """Test getting relevant context using RAG"""
+        # Mock the OpenAI dependencies
+        mock_embeddings.return_value = MagicMock()
+        mock_vector_store = MagicMock()
+        mock_vector_store.similarity_search.return_value = []
+        mock_faiss.from_documents.return_value = mock_vector_store
         
         with tempfile.TemporaryDirectory() as temp_dir:
+            # Create echoForge directory
+            echoForge_dir = os.path.join(temp_dir, "echoForge")
+            os.makedirs(echoForge_dir, exist_ok=True)
+            
+            # Create test historical posts
+            test_posts = [
+                {
+                    "platform": "LinkedIn",
+                    "title": "AI Development",
+                    "content": "Working on AI projects",
+                    "response": "Great work on AI!",
+                    "timestamp": "2024-01-01T00:00:00"
+                }
+            ]
+            
+            with open(os.path.join(echoForge_dir, "historical_posts.json"), 'w') as f:
+                json.dump(test_posts, f)
+            
             memory = EchoForgeMemory(temp_dir)
             
-            # Save profile
-            memory.save_user_profile(test_profile)
+            # Test getting relevant context
+            context = memory.get_relevant_context("AI development", limit=1)
             
-            # Verify file was created
-            assert os.path.exists(memory.profile_file)
-            
-            # Verify content
-            with open(memory.profile_file, 'r') as f:
-                saved_profile = json.load(f)
-            
-            assert saved_profile == test_profile
-    
-    def test_save_user_profile_creates_directory(self):
-        """Test that save_user_profile creates directory if it doesn't exist"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create nested directory path
-            nested_dir = os.path.join(temp_dir, "nested", "subdir")
-            memory = EchoForgeMemory(nested_dir)
-            
-            test_profile = {"personality_traits": {}}
-            memory.save_user_profile(test_profile)
-            
-            # Verify directory was created and file exists
-            assert os.path.exists(nested_dir)
-            assert os.path.exists(memory.profile_file)
-    
-    def test_store_learning_conversation(self):
-        """Test storing learning conversation"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            memory = EchoForgeMemory(temp_dir)
-            
-            question = "What are your hobbies?"
-            answer = "I enjoy programming and reading"
-            
-            # This should not raise an exception
-            memory.store_learning_conversation(question, answer)
-            
-            # TODO: When TTL storage is implemented, verify the data is stored
-    
-    def test_store_echo_conversation(self):
-        """Test storing echo conversation"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            memory = EchoForgeMemory(temp_dir)
-            
-            prompt = "What do you think about AI?"
-            response = "AI is fascinating and has great potential"
-            confidence = 0.85
-            
-            # This should not raise an exception
-            memory.store_echo_conversation(prompt, response, confidence)
-            
-            # TODO: When TTL storage is implemented, verify the data is stored
-    
-    def test_get_relevant_context(self):
-        """Test getting relevant context for echo mode"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            memory = EchoForgeMemory(temp_dir)
-            
-            prompt = "What do you think about AI?"
-            context = memory.get_relevant_context(prompt)
-            
-            # Should return a list (empty for now since TTL storage not implemented)
+            # Should return a list (may be empty if embeddings fail)
             assert isinstance(context, list)
     
-    def test_create_empty_profile_structure(self):
+    @patch('src.agents.echoForge.memory.FAISS')
+    @patch('src.agents.echoForge.memory.OpenAIEmbeddings')
+    def test_create_empty_profile_structure(self, mock_embeddings, mock_faiss):
         """Test that _create_empty_profile returns correct structure"""
+        # Mock the OpenAI dependencies
+        mock_embeddings.return_value = MagicMock()
+        mock_faiss.from_documents.return_value = MagicMock()
+        
         with tempfile.TemporaryDirectory() as temp_dir:
             memory = EchoForgeMemory(temp_dir)
             
@@ -182,27 +176,3 @@ class TestEchoForgeMemory:
             # Check timestamps are valid ISO format
             datetime.fromisoformat(profile["created_at"])
             datetime.fromisoformat(profile["last_updated"])
-    
-    def test_profile_roundtrip(self):
-        """Test saving and loading profile maintains all data"""
-        original_profile = {
-            "personality_traits": {"analytical": 0.8, "creative": 0.6},
-            "interests": ["AI", "programming", "music"],
-            "communication_style": {"formal": True, "humor": False, "detailed": True},
-            "expertise_areas": ["Python", "Machine Learning", "Data Science"],
-            "decision_patterns": {"methodical": True, "risk_averse": False},
-            "created_at": "2024-01-01T00:00:00",
-            "last_updated": "2024-01-02T12:00:00"
-        }
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            memory = EchoForgeMemory(temp_dir)
-            
-            # Save profile
-            memory.save_user_profile(original_profile)
-            
-            # Load profile
-            loaded_profile = memory.load_user_profile()
-            
-            # Verify all data matches
-            assert loaded_profile == original_profile

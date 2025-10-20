@@ -28,7 +28,7 @@ class TestEchoForgeConfig:
         """Test loading config from existing file"""
         # Create temporary config file
         config_data = {
-            "mode": "instruct",
+            "mode": "copilot",
             "llm_model": "gpt-3.5-turbo",
             "llm_temperature": 0.5,
             "max_conversation_history": 20,
@@ -45,7 +45,7 @@ class TestEchoForgeConfig:
         try:
             config = EchoForgeConfig.from_file(temp_path)
             
-            assert config.mode == "instruct"
+            assert config.mode == "copilot"
             assert config.llm_model == "gpt-3.5-turbo"
             assert config.llm_temperature == 0.5
             assert config.max_conversation_history == 20
@@ -68,7 +68,7 @@ class TestEchoForgeConfig:
     def test_save_to_file(self):
         """Test saving config to file"""
         config = EchoForgeConfig()
-        config.mode = "echo"
+        config.mode = "copilot"
         config.llm_model = "gpt-3.5-turbo"
         
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -82,7 +82,7 @@ class TestEchoForgeConfig:
             with open(config_path, 'r') as f:
                 saved_data = yaml.safe_load(f)
             
-            assert saved_data["mode"] == "echo"
+            assert saved_data["mode"] == "copilot"
             assert saved_data["llm_model"] == "gpt-3.5-turbo"
             assert saved_data["llm_temperature"] == 0.7
     
@@ -104,7 +104,7 @@ class TestEchoForgeConfig:
     def test_config_roundtrip(self):
         """Test saving and loading config maintains all values"""
         original_config = EchoForgeConfig()
-        original_config.mode = "instruct"
+        original_config.mode = "copilot"
         original_config.llm_model = "custom-model"
         original_config.llm_temperature = 0.9
         original_config.max_conversation_history = 15

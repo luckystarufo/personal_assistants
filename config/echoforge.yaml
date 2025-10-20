@@ -1,9 +1,7 @@
 # EchoForge Agent Configuration
-mode: "learning"
-llm_model: "gpt-4"
-llm_temperature: 0.7
-max_conversation_history: 10
-confidence_threshold: 0.7
-data_dir: "data/echoForge"
+mode: "copilot"
+llm_model: "gpt-4o"
+llm_temperature: 0.0
+data_dir: "data"
 logs_dir: "logs"
 cache_dir: "cache"
