@@ -1,5 +1,4 @@
 # EchoForge Agent Configuration
-mode: "copilot"
 llm_model: "gpt-4o"
 llm_temperature: 0.0
 data_dir: "data"

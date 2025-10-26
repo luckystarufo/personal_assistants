@@ -21,7 +21,7 @@ class EchoForgeAgent:
     def __init__(self, config_path: str = "config/echoforge.yaml"):
         self.config = EchoForgeConfig.from_file(config_path)
         self.memory = EchoForgeMemory(self.config.data_dir)
-        self.copilot_prompts = CopilotPrompts()
+        self.prompt_builder = CopilotPrompts()
         
         # Initialize LLM
         self.llm = ChatOpenAI(
@@ -29,17 +29,11 @@ class EchoForgeAgent:
             temperature=self.config.llm_temperature
         )
         
-        # Build appropriate graph based on mode
-        if self.config.mode == "copilot":
-            self.graph = self._build_copilot_graph()
-        elif self.config.mode == "echo":
-            # Echo mode uses the echo() function directly, no graph needed
-            self.graph = None
-        else:
-            raise ValueError(f"Invalid mode '{self.config.mode}'. Must be one of: copilot, echo")
+        # Build graph
+        self.graph = self._build_graph()
     
-    def _build_copilot_graph(self) -> StateGraph:
-        """Build LangGraph workflow for copilot mode"""
+    def _build_graph(self) -> StateGraph:
+        """Build LangGraph workflow"""
         workflow = StateGraph(EchoModeState)
         
         # Add nodes
@@ -144,7 +138,7 @@ Response:"""
         # 1. Check for exit intent from the last message
         if state.get("messages"):
             last_message = state["messages"][-1].content
-            quit_prompt = self.copilot_prompts.detect_quit_intent_prompt(last_message)
+            quit_prompt = self.prompt_builder.detect_quit_intent_prompt(last_message)
             quit_response = self.llm.invoke(quit_prompt).content.strip()
             if quit_response == "QUIT":
                 state["status"] = "exit"
@@ -158,7 +152,7 @@ Response:"""
         if not missing_fields:
             # All fields are populated - generate confirmation message
             state["status"] = "confirm"
-            confirmation_message = self.copilot_prompts.confirmation_message(
+            confirmation_message = self.prompt_builder.confirmation_message(
                 post_info.get('platform', 'Not provided'),
                 post_info.get('title', 'Not provided'),
                 post_info.get('content', 'Not provided')
@@ -168,7 +162,7 @@ Response:"""
         else:
             # 3. Missing fields - set status to continue and add missing message
             state["status"] = "continue"
-            missing_message = self.copilot_prompts.ask_for_missing_fields(missing_fields)
+            missing_message = self.prompt_builder.ask_for_missing_fields(missing_fields)
             state["messages"].append(AIMessage(content=missing_message, name="EchoForge"))
             state["messages"][-1].pretty_print()
         
@@ -180,18 +174,18 @@ Response:"""
         user_response = state["messages"][-1].content
         
         # Process the user's response to the confirmation
-        confirmation_prompt = self.copilot_prompts.parse_confirmation_prompt(user_response)
+        confirmation_prompt = self.prompt_builder.parse_confirmation_prompt(user_response)
         confirmation_response = self.llm.invoke(confirmation_prompt).content.strip()
         
         if confirmation_response == "CONFIRMED":
             # User confirmed the info
-            confirm_message = self.copilot_prompts.confirmation_success_message()
+            confirm_message = self.prompt_builder.confirmation_success_message()
             state["messages"].append(AIMessage(content=confirm_message, name="EchoForge"))
             state["messages"][-1].pretty_print()
             state["status"] = "proceed"
         elif confirmation_response == "MODIFY":
             # User wants to modify the info
-            modify_message = self.copilot_prompts.modification_request_message()
+            modify_message = self.prompt_builder.modification_request_message()
             state["messages"].append(AIMessage(content=modify_message, name="EchoForge"))
             state["messages"][-1].pretty_print()
             state["status"] = "modify"
@@ -200,7 +194,7 @@ Response:"""
             state["status"] = "exit"
         else:
             # Default to proceed if unclear
-            confirm_message = self.copilot_prompts.default_confirmation_message()
+            confirm_message = self.prompt_builder.default_confirmation_message()
             state["messages"].append(AIMessage(content=confirm_message, name="EchoForge"))
             state["messages"][-1].pretty_print()
             state["status"] = "proceed"
@@ -216,7 +210,7 @@ Response:"""
         relevant_context = self.memory.get_relevant_context(post_content)
         
         # Generate response using LLM
-        response_prompt = self.copilot_prompts.generate_response_prompt(
+        response_prompt = self.prompt_builder.generate_response_prompt(
             user_profile=user_profile,
             examples=relevant_context,
             platform=state["post_info"].get("platform", ""),
@@ -298,7 +292,7 @@ Response:"""
     def _handle_exit_node(self, state: EchoModeState) -> EchoModeState:
         """Handle quit/exit scenarios"""
         
-        exit_message = self.copilot_prompts.exit_message()
+        exit_message = self.prompt_builder.exit_message()
         state["messages"].append(AIMessage(content=exit_message, name="EchoForge"))
         state["messages"][-1].pretty_print()
         return state
@@ -357,51 +351,47 @@ Response:"""
         # Create a thread config for the conversation
         config = {"configurable": {"thread_id": str(uuid.uuid4())}}
         
-        # Create initial state based on mode
-        if self.config.mode == "copilot":
-            initial_state: EchoModeState = {
-                "messages": [AIMessage(content=self.copilot_prompts.greeting(), name="EchoForge")],
-                "post_info": {"platform": "", "title": "", "content": ""},
-                "ai_response": "",
-                "ai_evaluation": "",
-                "status": ""
-            }
-            # Single loop to handle both initial execution and resumption after interrupts
-            initial_state["messages"][-1].pretty_print() # print greeting message
-            
-            # Copilot mode graph execution
-            current_state = initial_state
-            while True:
+        # Create initial state
+        initial_state: EchoModeState = {
+            "messages": [AIMessage(content=self.prompt_builder.greeting(), name="EchoForge")],
+            "post_info": {"platform": "", "title": "", "content": ""},
+            "ai_response": "",
+            "ai_evaluation": "",
+            "status": ""
+        }
+        
+        # Print greeting message
+        initial_state["messages"][-1].pretty_print()
+        
+        # Graph execution loop
+        current_state = initial_state
+        while True:
+            try:
+                # Stream the graph execution with values mode
+                for event in self.graph.stream(current_state, config=config, stream_mode="values"):
+                    pass
+                # Check if the graph is in an interrupted state
                 try:
-                    # Stream the graph execution with values mode
-                    for event in self.graph.stream(current_state, config=config, stream_mode="values"):
-                        pass
-                    # Check if the graph is in an interrupted state
-                    try:
-                        # Try to get the current state to see if we're interrupted
-                        current_graph_state = self.graph.get_state(config)
-                        if current_graph_state.next:
-                            # Graph is interrupted, get user input and continue
-                            print("="*33 + " Human Input " + "="*33)
-                            user_message = input("Your response:\n")
-                            # Update state with user input and continue
-                            self.graph.update_state(config, {"messages": [HumanMessage(content=user_message)]})
-                            current_state = None  # Use None to resume from checkpoint
-                            continue  # Continue the while loop to resume execution
-                        else:
-                            # Graph completed successfully
-                            break
-                            
-                    except Exception as e:
+                    # Try to get the current state to see if we're interrupted
+                    current_graph_state = self.graph.get_state(config)
+                    if current_graph_state.next:
+                        # Graph is interrupted, get user input and continue
+                        print("="*33 + " Human Input " + "="*33)
+                        user_message = input("Your response:\n")
+                        # Update state with user input and continue
+                        self.graph.update_state(config, {"messages": [HumanMessage(content=user_message)]})
+                        current_state = None  # Use None to resume from checkpoint
+                        continue  # Continue the while loop to resume execution
+                    else:
+                        # Graph completed successfully
                         break
-                    
-                except KeyboardInterrupt:
-                    break
+                        
                 except Exception as e:
                     break
-            
-            return None
-        else:
-            # Echo mode doesn't use chat interface
-            print("Echo mode uses the echo() function directly. No chat interface needed.")
-            return None
+                
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                break
+        
+        return None
