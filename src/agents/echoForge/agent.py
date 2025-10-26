@@ -30,25 +30,12 @@ class EchoForgeAgent:
         )
         
         # Build appropriate graph based on mode
-        if self.config.mode == "interview":
-            self.graph = self._build_interview_graph()
-        elif self.config.mode == "copilot":
+        if self.config.mode == "copilot":
             self.graph = self._build_copilot_graph()
         elif self.config.mode == "echo":
             self.graph = self._build_echo_graph()
         else:
-            raise ValueError(f"Invalid mode '{self.config.mode}'. Must be one of: interview, copilot, echo")
-    
-    def _build_interview_graph(self) -> StateGraph:
-        """Build LangGraph workflow for interview mode"""
-        workflow = StateGraph(EchoForgeState)
-        
-        # Add dummy node for testing
-        workflow.add_node("dummy_interview_node", self._dummy_interview_node)
-        workflow.add_edge("dummy_interview_node", END)
-        workflow.set_entry_point("dummy_interview_node")
-        
-        return workflow.compile(checkpointer=self.memory.memory_saver)
+            raise ValueError(f"Invalid mode '{self.config.mode}'. Must be one of: copilot, echo")
     
     def _build_copilot_graph(self) -> StateGraph:
         """Build LangGraph workflow for copilot mode"""
@@ -104,11 +91,6 @@ class EchoForgeAgent:
         workflow.set_entry_point("dummy_echo_node")
         
         return workflow.compile(checkpointer=self.memory.memory_saver)
-    
-    def _dummy_interview_node(self, state: EchoForgeState) -> EchoForgeState:
-        """Dummy interview node for testing"""
-        state["messages"] = [AIMessage(content="Hello! I'm in interview mode. Ready to learn about you!", name="EchoForge")]
-        return state
     
     def _dummy_echo_node(self, state: EchoForgeState) -> EchoForgeState:
         """Dummy echo node for testing"""
