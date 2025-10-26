@@ -20,18 +20,6 @@ class TestEchoForgeAgent:
         mock_chat_openai.return_value = MagicMock()
         mock_embeddings.return_value = MagicMock()
         
-        # Test interview mode
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            yaml.dump({"mode": "interview"}, f)
-            temp_path = f.name
-        
-        try:
-            agent = EchoForgeAgent(temp_path)
-            assert agent.config.mode == "interview"
-            assert agent.graph is not None
-        finally:
-            os.unlink(temp_path)
-        
         # Test copilot mode
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
             yaml.dump({"mode": "copilot"}, f)
@@ -73,7 +61,7 @@ class TestEchoForgeAgent:
                 EchoForgeAgent(temp_path)
             
             assert "Invalid mode 'invalid_mode'" in str(exc_info.value)
-            assert "Must be one of: interview, copilot, echo" in str(exc_info.value)
+            assert "Must be one of: copilot, echo" in str(exc_info.value)
         finally:
             os.unlink(temp_path)
     
@@ -170,5 +158,5 @@ class TestEchoForgeAgent:
         
         # This should work with the default config/echoforge.yaml
         agent = EchoForgeAgent()
-        assert agent.config.mode in ["interview", "copilot", "echo"]
+        assert agent.config.mode in ["copilot", "echo"]
         assert agent.graph is not None

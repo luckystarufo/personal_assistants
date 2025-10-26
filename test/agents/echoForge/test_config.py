@@ -15,7 +15,7 @@ class TestEchoForgeConfig:
         """Test default configuration values"""
         config = EchoForgeConfig()
         
-        assert config.mode == "interview"
+        assert config.mode == "copilot"
         assert config.llm_model == "gpt-4"
         assert config.llm_temperature == 0.7
         assert config.max_conversation_history == 10
@@ -61,7 +61,7 @@ class TestEchoForgeConfig:
         config = EchoForgeConfig.from_file("non_existent_config.yaml")
         
         # Should return default values
-        assert config.mode == "interview"
+        assert config.mode == "copilot"
         assert config.llm_model == "gpt-4"
         assert config.llm_temperature == 0.7
     
