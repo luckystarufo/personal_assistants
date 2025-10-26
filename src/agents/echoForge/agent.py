@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from .state import EchoForgeState, EchoModeState, PostSchema
 from .config import EchoForgeConfig
 from .memory import EchoForgeMemory
-from src.prompts.echoForge.copilot_prompts import CopilotPrompts
+from src.prompts.echoForge.copilot_prompts import EchoForgePrompts
 
 
 class EchoForgeAgent:
@@ -21,7 +21,7 @@ class EchoForgeAgent:
     def __init__(self, config_path: str = "config/echoforge.yaml"):
         self.config = EchoForgeConfig.from_file(config_path)
         self.memory = EchoForgeMemory(self.config.data_dir)
-        self.prompt_builder = CopilotPrompts()
+        self.prompt_builder = EchoForgePrompts()
         
         # Initialize LLM
         self.llm = ChatOpenAI(
@@ -76,39 +76,6 @@ class EchoForgeAgent:
         
         return workflow.compile(interrupt_before=["gather_post_info", "confirm_post_info"], checkpointer=self.memory.memory_saver)
     
-    def _build_echo_prompt(self, context: str, title: str, content: str, user_profile: dict, relevant_notes: list) -> str:
-        """Build the prompt for echo mode response generation"""
-        
-        # Format user profile
-        profile_text = json.dumps(user_profile, indent=2) if user_profile else "No profile data available"
-        
-        # Format relevant notes
-        notes_text = "\n\n".join([
-            f"Platform: {note.get('platform', 'Unknown')}\nTitle: {note.get('title', 'N/A')}\nContent: {note.get('content', 'N/A')}\nYour Response: {note.get('response', 'N/A')}"
-            for note in relevant_notes
-        ]) if relevant_notes else "No relevant historical examples found."
-        
-        prompt = f"""You are responding as if you were the user. Generate a response that matches their communication style, tone, knowledge, values, and preferences.
-
-Context: {context}
-Title: {title}
-Content: {content}
-
-User Profile:
-{profile_text}
-
-Relevant Historical Examples:
-{notes_text}
-
-Based on the context, title, and content above, generate a response that:
-1. Matches the user's communication style and tone
-2. Reflects their knowledge and expertise areas
-3. Aligns with their values and preferences
-4. Is appropriate for the given context
-
-Response:"""
-        
-        return prompt
     
     def _gather_post_info_node(self, state: EchoModeState) -> EchoModeState:
         """Gather platform, title, and content from user"""
@@ -339,7 +306,7 @@ Response:"""
         relevant_notes = self.memory.get_relevant_context(query, limit=3)
         
         # Build the prompt with all 5 parts
-        prompt = self._build_echo_prompt(context, title, content, user_profile, relevant_notes)
+        prompt = self.prompt_builder.build_echo_prompt(context, title, content, user_profile, relevant_notes)
         
         # Generate and return the response
         response = self.llm.invoke(prompt).content

@@ -1,11 +1,12 @@
 """
-EchoForge Copilot Mode Prompts
+EchoForge Prompt Builder
 """
 from typing import Dict, List, Any
+import json
 
 
-class CopilotPrompts:
-    """Prompt templates for EchoForge copilot mode"""
+class EchoForgePrompts:
+    """Prompt builder for EchoForge agent"""
     
     @staticmethod
     def greeting() -> str:
@@ -129,3 +130,38 @@ Examples:
 </evaluation>
 
 CRITICAL: Ensure both <response> and <evaluation> sections have proper opening AND closing tags."""
+    
+    @staticmethod
+    def build_echo_prompt(context: str, title: str, content: str, user_profile: dict, relevant_notes: list) -> str:
+        """Build the prompt for echo mode response generation"""
+        
+        # Format user profile
+        profile_text = json.dumps(user_profile, indent=2) if user_profile else "No profile data available"
+        
+        # Format relevant notes
+        notes_text = "\n\n".join([
+            f"Platform: {note.get('platform', 'Unknown')}\nTitle: {note.get('title', 'N/A')}\nContent: {note.get('content', 'N/A')}\nYour Response: {note.get('response', 'N/A')}"
+            for note in relevant_notes
+        ]) if relevant_notes else "No relevant historical examples found."
+        
+        prompt = f"""You are responding as if you were the user. Generate a response that matches their communication style, tone, knowledge, values, and preferences.
+
+Context: {context}
+Title: {title}
+Content: {content}
+
+User Profile:
+{profile_text}
+
+Relevant Historical Examples:
+{notes_text}
+
+Based on the context, title, and content above, generate a response that:
+1. Matches the user's communication style and tone
+2. Reflects their knowledge and expertise areas
+3. Aligns with their values and preferences
+4. Is appropriate for the given context
+
+Response:"""
+        
+        return prompt
