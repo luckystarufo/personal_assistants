@@ -33,7 +33,8 @@ class EchoForgeAgent:
         if self.config.mode == "copilot":
             self.graph = self._build_copilot_graph()
         elif self.config.mode == "echo":
-            self.graph = self._build_echo_graph()
+            # Echo mode uses the echo() function directly, no graph needed
+            self.graph = None
         else:
             raise ValueError(f"Invalid mode '{self.config.mode}'. Must be one of: copilot, echo")
     
@@ -81,21 +82,39 @@ class EchoForgeAgent:
         
         return workflow.compile(interrupt_before=["gather_post_info", "confirm_post_info"], checkpointer=self.memory.memory_saver)
     
-    def _build_echo_graph(self) -> StateGraph:
-        """Build LangGraph workflow for echo mode"""
-        workflow = StateGraph(EchoForgeState)
+    def _build_echo_prompt(self, context: str, title: str, content: str, user_profile: dict, relevant_notes: list) -> str:
+        """Build the prompt for echo mode response generation"""
         
-        # Add dummy node for testing
-        workflow.add_node("dummy_echo_node", self._dummy_echo_node)
-        workflow.add_edge("dummy_echo_node", END)
-        workflow.set_entry_point("dummy_echo_node")
+        # Format user profile
+        profile_text = json.dumps(user_profile, indent=2) if user_profile else "No profile data available"
         
-        return workflow.compile(checkpointer=self.memory.memory_saver)
-    
-    def _dummy_echo_node(self, state: EchoForgeState) -> EchoForgeState:
-        """Dummy echo node for testing"""
-        state["messages"] = [AIMessage(content="Hello! I'm in echo mode. Ready to help you craft responses!", name="EchoForge")]
-        return state
+        # Format relevant notes
+        notes_text = "\n\n".join([
+            f"Platform: {note.get('platform', 'Unknown')}\nTitle: {note.get('title', 'N/A')}\nContent: {note.get('content', 'N/A')}\nYour Response: {note.get('response', 'N/A')}"
+            for note in relevant_notes
+        ]) if relevant_notes else "No relevant historical examples found."
+        
+        prompt = f"""You are responding as if you were the user. Generate a response that matches their communication style, tone, knowledge, values, and preferences.
+
+Context: {context}
+Title: {title}
+Content: {content}
+
+User Profile:
+{profile_text}
+
+Relevant Historical Examples:
+{notes_text}
+
+Based on the context, title, and content above, generate a response that:
+1. Matches the user's communication style and tone
+2. Reflects their knowledge and expertise areas
+3. Aligns with their values and preferences
+4. Is appropriate for the given context
+
+Response:"""
+        
+        return prompt
     
     def _gather_post_info_node(self, state: EchoModeState) -> EchoModeState:
         """Gather platform, title, and content from user"""
@@ -304,6 +323,34 @@ class EchoForgeAgent:
             # Default fallback
             return "proceed"
     
+    def echo(self, context: str, title: str, content: str) -> str:
+        """
+        Echo mode function: generates a response based on context, title, and content.
+        
+        Args:
+            context: The platform/context (e.g., "LinkedIn", "Twitter", etc.)
+            title: The title of the post
+            content: The content of the post
+        
+        Returns:
+            A response string that mimics the user's communication style
+        """
+        # Get user profile
+        user_profile = self.memory.get_user_profile()
+        
+        # Build query string for vector store search (combine all three parts)
+        query = f"{context} {title} {content}".strip()
+        
+        # Get relevant notes from vector store (top 3)
+        relevant_notes = self.memory.get_relevant_context(query, limit=3)
+        
+        # Build the prompt with all 5 parts
+        prompt = self._build_echo_prompt(context, title, content, user_profile, relevant_notes)
+        
+        # Generate and return the response
+        response = self.llm.invoke(prompt).content
+        return response
+    
     def chat(self) -> str:
         """Main chat interface - agent initiates conversation"""
         
@@ -319,41 +366,42 @@ class EchoForgeAgent:
                 "ai_evaluation": "",
                 "status": ""
             }
-        else:
-            initial_state: EchoForgeState = {
-                "messages": []
-            }
-
-        # Single loop to handle both initial execution and resumption after interrupts
-        initial_state["messages"][-1].pretty_print() # print greeting message
-        current_state = initial_state
-        while True:
-            try:
-                # Stream the graph execution with values mode
-                for event in self.graph.stream(current_state, config=config, stream_mode="values"):
-                    pass
-                # Check if the graph is in an interrupted state
+            # Single loop to handle both initial execution and resumption after interrupts
+            initial_state["messages"][-1].pretty_print() # print greeting message
+            
+            # Copilot mode graph execution
+            current_state = initial_state
+            while True:
                 try:
-                    # Try to get the current state to see if we're interrupted
-                    current_graph_state = self.graph.get_state(config)
-                    if current_graph_state.next:
-                        # Graph is interrupted, get user input and continue
-                        print("="*33 + " Human Input " + "="*33)
-                        user_message = input("Your response:\n")
-                        # Update state with user input and continue
-                        self.graph.update_state(config, {"messages": [HumanMessage(content=user_message)]})
-                        current_state = None  # Use None to resume from checkpoint
-                        continue  # Continue the while loop to resume execution
-                    else:
-                        # Graph completed successfully
+                    # Stream the graph execution with values mode
+                    for event in self.graph.stream(current_state, config=config, stream_mode="values"):
+                        pass
+                    # Check if the graph is in an interrupted state
+                    try:
+                        # Try to get the current state to see if we're interrupted
+                        current_graph_state = self.graph.get_state(config)
+                        if current_graph_state.next:
+                            # Graph is interrupted, get user input and continue
+                            print("="*33 + " Human Input " + "="*33)
+                            user_message = input("Your response:\n")
+                            # Update state with user input and continue
+                            self.graph.update_state(config, {"messages": [HumanMessage(content=user_message)]})
+                            current_state = None  # Use None to resume from checkpoint
+                            continue  # Continue the while loop to resume execution
+                        else:
+                            # Graph completed successfully
+                            break
+                            
+                    except Exception as e:
                         break
-                        
+                    
+                except KeyboardInterrupt:
+                    break
                 except Exception as e:
                     break
-                
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                break
-        
-        return None
+            
+            return None
+        else:
+            # Echo mode doesn't use chat interface
+            print("Echo mode uses the echo() function directly. No chat interface needed.")
+            return None
