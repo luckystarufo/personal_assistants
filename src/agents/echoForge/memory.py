@@ -17,11 +17,13 @@ class EchoForgeMemory:
     def __init__(self, data_dir: str = "data"):
         self.data_dir = data_dir
         
-        # File paths for user profile and historical posts
+        # File paths for user profile and documents
         self.user_profile_file = os.path.join(data_dir, "shared", "user_profile.json")
-        self.historical_posts_file = os.path.join(data_dir, "echoForge", "historical_posts.json")
+        self.echoForge_documents_file = os.path.join(data_dir, "echoForge", "echoForge_documents.json")
         
         # Initialize embeddings model
+        # Using text-embedding-3-small: 1536 dims, good quality/cost balance
+        # Alternative: text-embedding-3-large (3072 dims, better quality, 6.5x more expensive)
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
         # Initialize user profile and vector store
@@ -31,16 +33,27 @@ class EchoForgeMemory:
         # Initialize session memory
         self.memory_saver = MemorySaver()
         
+        # Store current thread config (created on demand)
+        self.current_config = None
+    
+    def create_or_get_config(self) -> Dict[str, Any]:
+        """Create or get the current thread config"""
+        import uuid
+        if self.current_config is None:
+            self.current_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+        return self.current_config
+    
+    def get_config(self) -> Dict[str, Any]:
+        """Get the current thread config"""
+        return self.current_config
+        
     def _create_empty_profile(self) -> Dict[str, Any]:
         """Create empty user profile"""
         return {
-            "personality_traits": {},
-            "interests": [],
-            "communication_style": {},
-            "expertise_areas": [],
-            "decision_patterns": {},
-            "created_at": datetime.now().isoformat(),
-            "last_updated": datetime.now().isoformat()
+            "communication_style": "Authentic and natural - avoids AI-like language",
+            "tone": "Balanced and adaptive",
+            "personality": "Genuine and engaging",
+            "approach": "Values meaningful connection"
         }
     
     def _load_user_profile(self) -> Dict[str, Any]:
@@ -53,27 +66,29 @@ class EchoForgeMemory:
             return self._create_empty_profile()
     
     def _build_vector_store(self) -> FAISS:
-        """Build FAISS vector store from historical posts"""
+        """Build FAISS vector store from echoForge documents"""
         
-        if os.path.exists(self.historical_posts_file):
-            with open(self.historical_posts_file, 'r') as f:
-                posts = json.load(f)
+        if os.path.exists(self.echoForge_documents_file):
+            with open(self.echoForge_documents_file, 'r') as f:
+                documents_data = json.load(f)
                 
-                # Convert posts to documents for vector store
+                # Convert documents to vector store format
                 documents = []
-                for i, post in enumerate(posts):
-                    # Create a combined text for embedding
-                    combined_text = f"Platform: {post.get('platform', '')}\nTitle: {post.get('title', '')}\nContent: {post.get('content', '')}\nResponse: {post.get('response', '')}"
+                for i, doc_data in enumerate(documents_data):
+                    # Create a combined text for embedding using same format as search query
+                    combined_text = f"<context>{doc_data.get('context', '')}</context>\n<title>{doc_data.get('title', '')}</title>\n<content>{doc_data.get('content', '')}</content>"
                     
                     # Create document with metadata
                     doc = Document(
                         page_content=combined_text,
                         metadata={
-                            'platform': post.get('platform', ''),
-                            'title': post.get('title', ''),
-                            'content': post.get('content', ''),
-                            'response': post.get('response', ''),
-                            'timestamp': post.get('timestamp', ''),
+                            'url': doc_data.get('url', ''),
+                            'context': doc_data.get('context', ''),
+                            'title': doc_data.get('title', ''),
+                            'content': doc_data.get('content', ''),
+                            'human_response': doc_data.get('human_response', ''),
+                            'reflections': doc_data.get('reflections', ''),
+                            'timestamp': doc_data.get('timestamp', ''),
                             'index': i
                         }
                     )
@@ -93,25 +108,28 @@ class EchoForgeMemory:
         return self.user_profile
     
     def get_relevant_context(self, query: str, limit: int = 3) -> List[Dict[str, str]]:
-        """Retrieve relevant historical posts using semantic search"""
+        """Retrieve relevant posts using semantic search"""
         
         if self.vector_store is None:
             return []
         
         try:
-            # Perform semantic search using FAISS
-            docs = self.vector_store.similarity_search(query, k=limit)
+            # Perform semantic search with similarity scores
+            docs_with_scores = self.vector_store.similarity_search_with_score(query, k=limit)
             
             # Convert documents back to the expected format
             relevant_posts = []
-            for doc in docs:
+            for doc, score in docs_with_scores:
                 metadata = doc.metadata
                 relevant_posts.append({
-                    'platform': metadata.get('platform', ''),
+                    'url': metadata.get('url', ''),
+                    'context': metadata.get('context', ''),
                     'title': metadata.get('title', ''),
                     'content': metadata.get('content', ''),
-                    'response': metadata.get('response', ''),
-                    'timestamp': metadata.get('timestamp', '')
+                    'human_response': metadata.get('human_response', ''),
+                    'reflections': metadata.get('reflections', ''),
+                    'timestamp': metadata.get('timestamp', ''),
+                    'similarity_dist': float(score)  # FAISS distance score (lower = more similar)
                 })
             
             return relevant_posts

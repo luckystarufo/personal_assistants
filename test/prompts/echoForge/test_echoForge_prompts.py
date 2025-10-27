@@ -1,16 +1,16 @@
 """
-Unit tests for CopilotPrompts
+Unit tests for EchoForgePrompts
 """
 import pytest
-from src.prompts.echoForge.copilot_prompts import CopilotPrompts
+from src.prompts.echoForge.echoForge_prompts import EchoForgePrompts
 
 
-class TestCopilotPrompts:
-    """Test cases for CopilotPrompts class"""
+class TestEchoForgePrompts:
+    """Test cases for EchoForgePrompts class"""
     
     def test_greeting(self):
         """Test greeting message"""
-        greeting = CopilotPrompts.greeting()
+        greeting = EchoForgePrompts.greeting()
         
         assert isinstance(greeting, str)
         assert len(greeting) > 0
@@ -24,7 +24,7 @@ class TestCopilotPrompts:
         title = "AI Development"
         content = "Working on AI projects"
         
-        message = CopilotPrompts.confirmation_message(platform, title, content)
+        message = EchoForgePrompts.confirmation_message(platform, title, content)
         
         assert isinstance(message, str)
         assert len(message) > 0
@@ -34,7 +34,7 @@ class TestCopilotPrompts:
     
     def test_confirmation_success_message(self):
         """Test confirmation success message"""
-        message = CopilotPrompts.confirmation_success_message()
+        message = EchoForgePrompts.confirmation_success_message()
         
         assert isinstance(message, str)
         assert len(message) > 0
@@ -42,7 +42,7 @@ class TestCopilotPrompts:
     
     def test_modification_request_message(self):
         """Test modification request message"""
-        message = CopilotPrompts.modification_request_message()
+        message = EchoForgePrompts.modification_request_message()
         
         assert isinstance(message, str)
         assert len(message) > 0
@@ -50,7 +50,7 @@ class TestCopilotPrompts:
     
     def test_default_confirmation_message(self):
         """Test default confirmation message"""
-        message = CopilotPrompts.default_confirmation_message()
+        message = EchoForgePrompts.default_confirmation_message()
         
         assert isinstance(message, str)
         assert len(message) > 0
@@ -58,7 +58,7 @@ class TestCopilotPrompts:
     def test_ask_for_missing_fields(self):
         """Test asking for missing fields"""
         missing_fields = ["platform", "title"]
-        message = CopilotPrompts.ask_for_missing_fields(missing_fields)
+        message = EchoForgePrompts.ask_for_missing_fields(missing_fields)
         
         assert isinstance(message, str)
         assert len(message) > 0
@@ -67,7 +67,7 @@ class TestCopilotPrompts:
     
     def test_ask_for_missing_fields_empty(self):
         """Test asking for missing fields with empty list"""
-        message = CopilotPrompts.ask_for_missing_fields([])
+        message = EchoForgePrompts.ask_for_missing_fields([])
         
         assert isinstance(message, str)
         assert len(message) > 0
@@ -75,7 +75,7 @@ class TestCopilotPrompts:
     def test_parse_post_info_prompt(self):
         """Test parse post info prompt"""
         user_input = "LinkedIn post about AI development"
-        prompt = CopilotPrompts.parse_post_info_prompt(user_input)
+        prompt = EchoForgePrompts.parse_post_info_prompt(user_input)
         
         assert isinstance(prompt, str)
         assert len(prompt) > 0
@@ -87,7 +87,7 @@ class TestCopilotPrompts:
     def test_detect_quit_intent_prompt(self):
         """Test detect quit intent prompt"""
         user_input = "I want to quit"
-        prompt = CopilotPrompts.detect_quit_intent_prompt(user_input)
+        prompt = EchoForgePrompts.detect_quit_intent_prompt(user_input)
         
         assert isinstance(prompt, str)
         assert len(prompt) > 0
@@ -98,7 +98,7 @@ class TestCopilotPrompts:
     def test_parse_confirmation_prompt(self):
         """Test parse confirmation prompt"""
         user_input = "Yes, that looks good"
-        prompt = CopilotPrompts.parse_confirmation_prompt(user_input)
+        prompt = EchoForgePrompts.parse_confirmation_prompt(user_input)
         
         assert isinstance(prompt, str)
         assert len(prompt) > 0
@@ -128,7 +128,7 @@ class TestCopilotPrompts:
         title = "AI Development"
         content = "Working on AI projects"
         
-        prompt = CopilotPrompts.generate_response_prompt(
+        prompt = EchoForgePrompts.generate_response_prompt(
             user_profile, examples, platform, title, content
         )
         
@@ -151,7 +151,7 @@ class TestCopilotPrompts:
         title = ""
         content = ""
         
-        prompt = CopilotPrompts.generate_response_prompt(
+        prompt = EchoForgePrompts.generate_response_prompt(
             user_profile, examples, platform, title, content
         )
         
@@ -166,32 +166,32 @@ class TestCopilotPrompts:
     def test_all_static_methods(self):
         """Test that all methods are static and return expected types"""
         # Test that methods can be called without instantiation
-        greeting = CopilotPrompts.greeting()
+        greeting = EchoForgePrompts.greeting()
         assert isinstance(greeting, str)
         
-        confirmation = CopilotPrompts.confirmation_message("test", "test", "test")
+        confirmation = EchoForgePrompts.confirmation_message("test", "test", "test")
         assert isinstance(confirmation, str)
         
-        success_msg = CopilotPrompts.confirmation_success_message()
+        success_msg = EchoForgePrompts.confirmation_success_message()
         assert isinstance(success_msg, str)
         
-        modify_msg = CopilotPrompts.modification_request_message()
+        modify_msg = EchoForgePrompts.modification_request_message()
         assert isinstance(modify_msg, str)
         
-        default_msg = CopilotPrompts.default_confirmation_message()
+        default_msg = EchoForgePrompts.default_confirmation_message()
         assert isinstance(default_msg, str)
         
-        missing_msg = CopilotPrompts.ask_for_missing_fields(["test"])
+        missing_msg = EchoForgePrompts.ask_for_missing_fields(["test"])
         assert isinstance(missing_msg, str)
         
-        parse_prompt = CopilotPrompts.parse_post_info_prompt("test")
+        parse_prompt = EchoForgePrompts.parse_post_info_prompt("test")
         assert isinstance(parse_prompt, str)
         
-        quit_prompt = CopilotPrompts.detect_quit_intent_prompt("test")
+        quit_prompt = EchoForgePrompts.detect_quit_intent_prompt("test")
         assert isinstance(quit_prompt, str)
         
-        confirm_prompt = CopilotPrompts.parse_confirmation_prompt("test")
+        confirm_prompt = EchoForgePrompts.parse_confirmation_prompt("test")
         assert isinstance(confirm_prompt, str)
         
-        response_prompt = CopilotPrompts.generate_response_prompt({}, [], "", "", "")
+        response_prompt = EchoForgePrompts.generate_response_prompt({}, [], "", "", "")
         assert isinstance(response_prompt, str)

@@ -67,7 +67,7 @@ class TestEchoForgeAgent:
         assert agent.memory is not None
         
         # Check prompts
-        assert agent.copilot_prompts is not None
+        assert agent.echoForge_prompts is not None
         
         # Check graph
         assert agent.graph is not None

@@ -2,17 +2,17 @@
 EchoForge Main Agent Class
 """
 from typing import Dict, Any
-from datetime import datetime
 import uuid
 import json
-import os
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from .state import EchoForgeState, EchoModeState, PostSchema
 from .config import EchoForgeConfig
 from .memory import EchoForgeMemory
-from src.prompts.echoForge.copilot_prompts import EchoForgePrompts
+from src.prompts.echoForge.echoForge_prompts import EchoForgePrompts
+from src.agents.tools import ask_human
+from langgraph.prebuilt import create_react_agent
 
 
 class EchoForgeAgent:
@@ -37,223 +37,212 @@ class EchoForgeAgent:
         workflow = StateGraph(EchoModeState)
         
         # Add nodes
-        workflow.add_node("gather_post_info", self._gather_post_info_node)
-        workflow.add_node("validate_post_info", self._validate_post_info_node)
-        workflow.add_node("confirm_post_info", self._confirm_post_info_node)
-        workflow.add_node("generate_response", self._generate_response_node)
-        workflow.add_node("store_record", self._store_record_node)
+        workflow.add_node("gather_intent", self._gather_intent_node)
+        workflow.add_node("collect_post_info", self._collect_post_info_node)
+        workflow.add_node("echo", self._echo_node)
+        workflow.add_node("fetch_from_history", self._fetch_from_history_node)
         workflow.add_node("handle_exit", self._handle_exit_node)
         
-        # Add edges
-        workflow.add_edge("gather_post_info", "validate_post_info")
+        # Add conditional edges from gather_intent
         workflow.add_conditional_edges(
-            "validate_post_info",
-            self._should_continue_gathering,
+            "gather_intent",
+            self._route_by_intent,
             {
-                "continue": "gather_post_info",
-                "confirm": "confirm_post_info",
+                "collect": "collect_post_info",
+                "fetch": "fetch_from_history",
                 "exit": "handle_exit"
             }
         )
         
+        # Add conditional edges from collect_post_info
         workflow.add_conditional_edges(
-            "confirm_post_info",
-            self._should_proceed_from_confirmation,
+            "collect_post_info",
+            self._route_by_collect_status,
             {
-                "proceed": "generate_response",
-                "modify": "gather_post_info",
-                "exit": "handle_exit"
+                "echo": "echo",  # Route to echo node
+                "exit": "handle_exit"  # User wants to exit
             }
         )
         
-        # # Linear flow for the rest
-        workflow.add_edge("generate_response", "store_record")
-        workflow.add_edge("store_record", "handle_exit")
+        # Echo node ends after generating response
+        workflow.add_edge("echo", END)
+        
+        # Other paths end after their nodes
+        workflow.add_edge("fetch_from_history", END)
         workflow.add_edge("handle_exit", END)
         
         # Set entry point
-        workflow.set_entry_point("gather_post_info")
+        workflow.set_entry_point("gather_intent")
         
-        return workflow.compile(interrupt_before=["gather_post_info", "confirm_post_info"], checkpointer=self.memory.memory_saver)
+        return workflow.compile(checkpointer=self.memory.memory_saver)
     
-    
-    def _gather_post_info_node(self, state: EchoModeState) -> EchoModeState:
-        """Gather platform, title, and content from user"""
-        # Use LLM with structured output to parse post information
-        user_response = state["messages"][-1].content
-        parsed_post = self.llm.with_structured_output(PostSchema).invoke(user_response)
-    
-        # Store parsed information in state["post_info"] only if not empty
-        current_post_info = state.get("post_info", {})
+    def _gather_intent_node(self, state: EchoModeState) -> EchoModeState:
+        """Mini-ReAct node to determine user's intent"""
         
-        # Update platform if provided
-        if parsed_post.platform.strip():
-            state["post_info"]["platform"] = parsed_post.platform
+        # Get system prompt from prompt builder
+        system_prompt = self.prompt_builder.intent_gathering_system_prompt()
         
-        # Update title if provided
-        if parsed_post.title.strip():
-            state["post_info"]["title"] = parsed_post.title
+        # Add system message if not present
+        if not any(
+            (isinstance(msg, dict) and msg.get("role") == "system") or 
+            (hasattr(msg, "role") and msg.role == "system")
+            for msg in state.get("messages", [])
+        ):
+            state["messages"].insert(0, AIMessage(content=system_prompt, name="EchoForge"))
         
-        # Update content if provided
-        if parsed_post.content.strip():
-            state["post_info"]["content"] = parsed_post.content
+        # Create mini ReAct agent inline
+        tools = [ask_human]
+        mini_agent = create_react_agent(self.llm, tools)
         
-        return state
-    
-    def _validate_post_info_node(self, state: EchoModeState) -> EchoModeState:
-        """Validate post info and determine next status"""        
-        # 1. Check for exit intent from the last message
-        if state.get("messages"):
-            last_message = state["messages"][-1].content
-            quit_prompt = self.prompt_builder.detect_quit_intent_prompt(last_message)
-            quit_response = self.llm.invoke(quit_prompt).content.strip()
-            if quit_response == "QUIT":
+        # Run the mini agent with the same thread config from memory
+        result = mini_agent.invoke({"messages": state["messages"]}, config=self.memory.get_config())
+        
+        # Update state with new messages
+        state["messages"] = result.get("messages", state["messages"])
+        
+        # Determine intent from the last AI message only
+        last_assistant_msg = None
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, AIMessage) or (isinstance(msg, dict) and msg.get("role") == "assistant"):
+                last_assistant_msg = msg.content if hasattr(msg, 'content') else msg.get("content", "")
+                break
+        
+        print(f"[Agent]: {last_assistant_msg}")
+
+        # Detect status from AI's final summary message
+        if last_assistant_msg:
+            summary_text = last_assistant_msg.lower()
+            
+            # Check for OPTION tags or keywords
+            if "option_1" in summary_text or "provide" in summary_text or "new" in summary_text:
+                state["status"] = "collect"
+                print("[Status]: Proceeding to collect post information")
+            elif "option_2" in summary_text or "fetch" in summary_text or "existing" in summary_text:
+                state["status"] = "fetch"
+                print("[Status]: Proceeding to fetch from records")
+            elif "option_3" in summary_text or "exit" in summary_text or "quit" in summary_text or "stop" in summary_text:
                 state["status"] = "exit"
-                return state
-        
-        # 2. Check if all three fields are populated
-        post_info = state.get("post_info", {})
-        required_fields = ["platform", "title", "content"]
-        missing_fields = [field for field in required_fields if not post_info.get(field, "").strip()]
-        
-        if not missing_fields:
-            # All fields are populated - generate confirmation message
-            state["status"] = "confirm"
-            confirmation_message = self.prompt_builder.confirmation_message(
-                post_info.get('platform', 'Not provided'),
-                post_info.get('title', 'Not provided'),
-                post_info.get('content', 'Not provided')
-            )
-            state["messages"].append(AIMessage(content=confirmation_message, name="EchoForge"))
-            state["messages"][-1].pretty_print()
+                print("[Status]: Proceeding to exit")
+            else:
+                # Default to exit if unclear
+                state["status"] = "exit"
+                print("[Status]: Unclear intent - proceeding to exit")
         else:
-            # 3. Missing fields - set status to continue and add missing message
-            state["status"] = "continue"
-            missing_message = self.prompt_builder.ask_for_missing_fields(missing_fields)
-            state["messages"].append(AIMessage(content=missing_message, name="EchoForge"))
-            state["messages"][-1].pretty_print()
-        
-        return state
-    
-    def _confirm_post_info_node(self, state: EchoModeState) -> EchoModeState:
-        """Process user's response to confirmation"""
-        
-        user_response = state["messages"][-1].content
-        
-        # Process the user's response to the confirmation
-        confirmation_prompt = self.prompt_builder.parse_confirmation_prompt(user_response)
-        confirmation_response = self.llm.invoke(confirmation_prompt).content.strip()
-        
-        if confirmation_response == "CONFIRMED":
-            # User confirmed the info
-            confirm_message = self.prompt_builder.confirmation_success_message()
-            state["messages"].append(AIMessage(content=confirm_message, name="EchoForge"))
-            state["messages"][-1].pretty_print()
-            state["status"] = "proceed"
-        elif confirmation_response == "MODIFY":
-            # User wants to modify the info
-            modify_message = self.prompt_builder.modification_request_message()
-            state["messages"].append(AIMessage(content=modify_message, name="EchoForge"))
-            state["messages"][-1].pretty_print()
-            state["status"] = "modify"
-        elif confirmation_response == "QUIT":
-            # User wants to quit
+            # No AI message yet, default to exit
             state["status"] = "exit"
-        else:
-            # Default to proceed if unclear
-            confirm_message = self.prompt_builder.default_confirmation_message()
-            state["messages"].append(AIMessage(content=confirm_message, name="EchoForge"))
-            state["messages"][-1].pretty_print()
-            state["status"] = "proceed"
+            print("[Status]: Unclear intent - proceeding to exit")
         
         return state
     
-    def _generate_response_node(self, state: EchoModeState) -> EchoModeState:
-        """Generate AI response and evaluation"""
+    def _route_by_intent(self, state: EchoModeState) -> str:
+        """Route based on status"""
+        status = state.get("status", "exit")
         
-        # Get user profile and relevant context
-        user_profile = self.memory.get_user_profile()
-        post_content = state["post_info"].get("content", "")
-        relevant_context = self.memory.get_relevant_context(post_content)
+        if status == "fetch":
+            return "fetch"
+        elif status == "collect":
+            return "collect"
+        else:
+            return "exit"
+    
+    def _route_by_collect_status(self, state: EchoModeState) -> str:
+        """Route based on collection status"""
+        status = state.get("status", "exit")
         
-        # Generate response using LLM
-        response_prompt = self.prompt_builder.generate_response_prompt(
-            user_profile=user_profile,
-            examples=relevant_context,
-            platform=state["post_info"].get("platform", ""),
-            title=state["post_info"].get("title", ""),
-            content=state["post_info"].get("content", "")
-        )
+        if status == "echo":
+            return "echo"
+        else:
+            return "exit"
+    
+    def _collect_post_info_node(self, state: EchoModeState) -> EchoModeState:
+        """Mini-ReAct node to collect post information (context, title, content)"""
         
-        llm_response = self.llm.invoke(response_prompt).content
+        # Get system prompt from prompt builder
+        system_prompt = self.prompt_builder.collect_post_info_system_prompt()
         
-        # Parse response and evaluation from LLM output
-        # Parse AI response
-        try:
-            response_start = llm_response.find("<response>")
-            response_end = llm_response.find("</response>")
+        # Add system message if not present
+        if not any(
+            (isinstance(msg, dict) and msg.get("role") == "system") or 
+            (hasattr(msg, "role") and msg.role == "system")
+            for msg in state.get("messages", [])
+        ):
+            state["messages"].insert(0, AIMessage(content=system_prompt, name="EchoForge"))
+        
+        # Create mini ReAct agent inline
+        tools = [ask_human]
+        mini_agent = create_react_agent(self.llm, tools)
+        
+        # Run the mini agent with the same thread config from memory
+        result = mini_agent.invoke({"messages": state["messages"]}, config=self.memory.get_config())
+        
+        # Update state with new messages
+        state["messages"] = result.get("messages", state["messages"])
+        
+        # Extract information from the conversation and parse post info
+        # Look at the last assistant message for confirmation status
+        last_assistant_msg = None
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, AIMessage) or (isinstance(msg, dict) and msg.get("role") == "assistant"):
+                last_assistant_msg = msg.content if hasattr(msg, 'content') else msg.get("content", "")
+                break
+        
+        print(f"[Agent]: {last_assistant_msg}")
+        
+        # Check if user wants to exit or if confirmed
+        if last_assistant_msg:
+            summary_text = last_assistant_msg.lower()
             
-            if response_start != -1 and response_end != -1:
-                state["ai_response"] = llm_response[response_start + 10:response_end].strip()
+            if "exit" in summary_text or "quit" in summary_text or "stop" in summary_text:
+                state["status"] = "exit"
+                print("[Status]: User wants to exit")
+            elif "collected_info:" in last_assistant_msg.lower():
+                # Parse data using LLM structured output
+                try:
+                    # Use LLM with structured output to parse post information
+                    parsed_post = self.llm.with_structured_output(PostSchema).invoke(last_assistant_msg)
+                    
+                    # Update post_info in state
+                    state["post_info"]["context"] = parsed_post.context
+                    state["post_info"]["title"] = parsed_post.title
+                    state["post_info"]["content"] = parsed_post.content
+                                        
+                    state["status"] = "echo"
+                    print("[Status]: Ready to echo response")
+                except Exception as e:
+                    print(f"[Status]: Error parsing collected info: {e}")
+                    state["status"] = "exit"
             else:
-                state["ai_response"] = llm_response
-        except Exception as e:
-            state["ai_response"] = llm_response
-        
-        # Parse AI evaluation
-        try:
-            evaluation_start = llm_response.find("<evaluation>")
-            evaluation_end = llm_response.find("</evaluation>")
-            
-            if evaluation_start != -1 and evaluation_end != -1:
-                state["ai_evaluation"] = llm_response[evaluation_start + 12:evaluation_end].strip()
-            else:
-                state["ai_evaluation"] = "Evaluation not found in LLM response"
-        except Exception as e:
-            state["ai_evaluation"] = "Error parsing evaluation"
-        
-        # Add AI response message
-        response_message = AIMessage(content=f"Response: {state['ai_response']}", name="EchoForge")
-        state["messages"].append(response_message)
-        response_message.pretty_print()
-        
-        # Add AI evaluation message
-        evaluation_message = AIMessage(content=f"Evaluation: {state['ai_evaluation']}", name="EchoForge")
-        state["messages"].append(evaluation_message)
-        evaluation_message.pretty_print()
+                state["status"] = "exit"
+                print("[Status]: No collected info found - exiting")
+        else:
+            state["status"] = "exit"
+            print("[Status]: No message found - exiting")
         
         return state
     
-    def _store_record_node(self, state: EchoModeState) -> EchoModeState:
-        """Store interaction record to echoRecordQueue.json"""
+    def _echo_node(self, state: EchoModeState) -> EchoModeState:
+        """Generate echo response using the collected post information"""
         
-        record = {
-            "platform": state["post_info"].get("platform", ""),
-            "title": state["post_info"].get("title", ""),
-            "content": state["post_info"].get("content", ""),
-            "ai_response": state["ai_response"],
-            "ai_evaluation": state["ai_evaluation"],
-            "timestamp": datetime.now().isoformat()
-        }
+        # Get post information from state
+        post_info = state.get("post_info", {})
+        context = post_info.get("context", "")
+        title = post_info.get("title", "")
+        content = post_info.get("content", "")
         
-        # Store to echoRecordQueue.json
-        queue_file = os.path.join(self.config.data_dir, "echoForge", "echoRecordQueue.json")
-        os.makedirs(os.path.dirname(queue_file), exist_ok=True)
+        # Generate echo response using the echo function
+        response = self.echo(context, title, content)
         
-        # Load existing records or create new list
-        if os.path.exists(queue_file):
-            with open(queue_file, 'r') as f:
-                records = json.load(f)
-        else:
-            records = []
+        # Add response to messages
+        state["messages"].append(AIMessage(content=response, name="EchoForge"))
         
-        # Append new record
-        records.append(record)
+        # Print the response
+        print(f"[Agent]: {response}")
         
-        # Save back to file
-        with open(queue_file, 'w') as f:
-            json.dump(records, f, indent=2)
-        
+        return state
+    
+    def _fetch_from_history_node(self, state: EchoModeState) -> EchoModeState:
+        """Fetch a post from history"""
+        # This is a placeholder - implement logic to fetch from history
         return state
     
     def _handle_exit_node(self, state: EchoModeState) -> EchoModeState:
@@ -261,28 +250,11 @@ class EchoForgeAgent:
         
         exit_message = self.prompt_builder.exit_message()
         state["messages"].append(AIMessage(content=exit_message, name="EchoForge"))
-        state["messages"][-1].pretty_print()
+        
+        # Print in the same format as other nodes
+        print(f"[Agent]: {exit_message}")
+        
         return state
-    
-    def _should_continue_gathering(self, state: EchoModeState) -> str:
-        """Route based on status set by validate_post_info_node"""
-        status = state.get("status", "")
-        
-        if status in ["exit", "confirm", "continue"]:
-            return status
-        else:
-            # Default fallback
-            return "continue"
-    
-    def _should_proceed_from_confirmation(self, state: EchoModeState) -> str:
-        """Route based on status set by confirm_post_info_node"""
-        status = state.get("status", "")
-        
-        if status in ["proceed", "modify", "exit"]:
-            return status
-        else:
-            # Default fallback
-            return "proceed"
     
     def echo(self, context: str, title: str, content: str) -> str:
         """
@@ -299,8 +271,8 @@ class EchoForgeAgent:
         # Get user profile
         user_profile = self.memory.get_user_profile()
         
-        # Build query string for vector store search (combine all three parts)
-        query = f"{context} {title} {content}".strip()
+        # Build query string for vector store search with proper formatting
+        query = f"<context>{context}</context>\n<title>{title}</title>\n<content>{content}</content>".strip()
         
         # Get relevant notes from vector store (top 3)
         relevant_notes = self.memory.get_relevant_context(query, limit=3)
@@ -315,50 +287,30 @@ class EchoForgeAgent:
     def chat(self) -> str:
         """Main chat interface - agent initiates conversation"""
         
-        # Create a thread config for the conversation
-        config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+        # Create or get thread config from memory
+        config = self.memory.create_or_get_config()
         
         # Create initial state
         initial_state: EchoModeState = {
-            "messages": [AIMessage(content=self.prompt_builder.greeting(), name="EchoForge")],
-            "post_info": {"platform": "", "title": "", "content": ""},
+            "messages": [],
+            "post_info": {"context": "", "title": "", "content": ""},
             "ai_response": "",
             "ai_evaluation": "",
-            "status": ""
+            "human_response": "",
+            "reflections": "",
+            "status": ""  # Will be set by gather_intent_node: "collect", "fetch", or "exit"
         }
         
-        # Print greeting message
-        initial_state["messages"][-1].pretty_print()
-        
-        # Graph execution loop
-        current_state = initial_state
-        while True:
-            try:
-                # Stream the graph execution with values mode
-                for event in self.graph.stream(current_state, config=config, stream_mode="values"):
-                    pass
-                # Check if the graph is in an interrupted state
-                try:
-                    # Try to get the current state to see if we're interrupted
-                    current_graph_state = self.graph.get_state(config)
-                    if current_graph_state.next:
-                        # Graph is interrupted, get user input and continue
-                        print("="*33 + " Human Input " + "="*33)
-                        user_message = input("Your response:\n")
-                        # Update state with user input and continue
-                        self.graph.update_state(config, {"messages": [HumanMessage(content=user_message)]})
-                        current_state = None  # Use None to resume from checkpoint
-                        continue  # Continue the while loop to resume execution
-                    else:
-                        # Graph completed successfully
-                        break
-                        
-                except Exception as e:
-                    break
-                
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                break
+        # Just stream and print all messages
+        try:
+            # Stream the graph execution in updates mode
+            for _ in self.graph.stream(initial_state, config=config, stream_mode="updates"):
+                pass     
+        except KeyboardInterrupt:
+            print("\nInterrupted by user, exiting...")
+        except Exception as e:
+            print(f"\nError: {e}")
+            import traceback
+            traceback.print_exc()
         
         return None

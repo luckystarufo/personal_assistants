@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 
 class PostSchema(BaseModel):
     """Schema for parsing post information - EXTRACT ONLY what is explicitly provided, do not add or infer additional content"""
-    platform: str = Field(
+    context: str = Field(
         default="", 
-        description="EXTRACT ONLY the platform mentioned in the text (LinkedIn, Twitter, Reddit, etc.). If not mentioned, leave empty. Do not infer."
+        description="EXTRACT ONLY the context or platform mentioned in the text. If not mentioned, leave empty. Do not infer."
     )
     title: str = Field(
         default="", 
@@ -29,7 +29,9 @@ class EchoForgeState(MessagesState):
 
 class EchoModeState(MessagesState):
     """State schema for Echo mode"""
-    post_info: Dict[str, str]  # platform, title, content
+    post_info: Dict[str, str]  # context, title, content
     ai_response: str
     ai_evaluation: str
-    status: str  # Track current status: "continue", "confirm", "exit"
+    human_response: str  # User's preferred response
+    reflections: str  # Notes on differences between AI and human responses
+    status: str  # Track current status: "collect", "fetch", "exit", "continue", "confirm"
